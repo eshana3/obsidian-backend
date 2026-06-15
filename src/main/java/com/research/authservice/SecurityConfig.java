@@ -29,7 +29,10 @@ public class SecurityConfig {
         config.setAllowedOrigins(Arrays.asList(
                 "http://localhost:5500",
                 "http://127.0.0.1:5500",
-                "https://idyllic-cascaron-358082.netlify.app"
+                "http://localhost:3001",
+                "http://localhost:8080",
+                "https://idyllic-cascaron-358082.netlify.app",
+                "https://obsidian-frontend-ywof.onrender.com"
         ));
         config.setAllowedMethods(Arrays.asList("GET","POST","PUT","DELETE","OPTIONS"));
         config.setAllowedHeaders(Arrays.asList("*"));
