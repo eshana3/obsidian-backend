@@ -27,19 +27,29 @@ public class DataSourceLogger {
     @EventListener(ApplicationReadyEvent.class)
     public void logDatasourceInfo() {
         try {
-            // Strip "jdbc:" so java.net.URI can parse it
+            // Strip "jdbc:" so java.net.URI can parse the remainder.
+            // At this point datasourceUrl is already the credential-free form
+            // set by AuthServiceApplication.parseAndApplyDatasourceUrl().
             URI uri = new URI(datasourceUrl.replace("jdbc:", ""));
+
             String host   = uri.getHost() != null ? uri.getHost() : "unknown";
-            int    port   = uri.getPort() > 0   ? uri.getPort()  : 5432;
+            int    port   = uri.getPort() > 0     ? uri.getPort()  : 5432;
             String dbName = uri.getPath() != null
                     ? uri.getPath().replaceFirst("^/", "")
                     : "unknown";
 
-            log.info("=== DataSource ready ===");
+            // Sanity-check: credentials must not appear in the URL at this point.
+            if (uri.getUserInfo() != null) {
+                log.warn("DataSource URL unexpectedly contains embedded credentials — " +
+                         "check AuthServiceApplication.parseAndApplyDatasourceUrl()");
+            }
+
+            log.info("=== DataSource connected ===");
+            log.info("  JDBC URL : {}", datasourceUrl);
             log.info("  Host     : {}:{}", host, port);
             log.info("  Database : {}", dbName);
             log.info("  Driver   : {}", driverClassName);
-            log.info("=======================");
+            log.info("===========================");
         } catch (Exception e) {
             log.warn("Could not parse datasource URL for diagnostics: {}", e.getMessage());
         }
