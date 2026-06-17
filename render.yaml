@@ -5,9 +5,15 @@ services:
     buildCommand: ./mvnw clean package -DskipTests
     startCommand: java -jar target/*.jar
     envVars:
+      # Set these in the Render dashboard → Environment tab.
+      # SPRING_DATASOURCE_URL may be in postgres:// format — the app converts
+      # it to jdbc:postgresql:// automatically before HikariCP reads it.
       - key: SPRING_DATASOURCE_URL
         sync: false
       - key: SPRING_DATASOURCE_USERNAME
         sync: false
       - key: SPRING_DATASOURCE_PASSWORD
+        sync: false
+      # Must be at least 32 characters for HS256 JWT signing.
+      - key: JWT_SECRET
         sync: false
