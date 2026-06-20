@@ -32,6 +32,7 @@ services:
         sync: false
       - key: GITHUB_CLIENT_SECRET
         sync: false
-      # Frontend URL for post-OAuth redirect
-      - key: FRONTEND_BASE_URL
+      # Frontend URL for post-OAuth redirect (success and failure).
+      # Must match the actual Render frontend service URL.
+      - key: FRONTEND_URL
         value: https://obsidian-frontend-ywof.onrender.com

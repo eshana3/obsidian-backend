@@ -21,8 +21,8 @@ public class EmailService {
     @Value("${spring.mail.username:noreply@obsidian.app}")
     private String fromEmail;
 
-    @Value("${app.frontend-base-url:http://localhost:3001}")
-    private String frontendBaseUrl;
+    @Value("${app.frontend-url:http://localhost:3001}")
+    private String frontendUrl;
 
     public void sendOtp(String toEmail, String otp, String userName) {
         if (mailSender == null) {

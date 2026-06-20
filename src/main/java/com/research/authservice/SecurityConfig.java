@@ -22,6 +22,9 @@ public class SecurityConfig {
     @Autowired
     private OAuthSuccessHandler oAuthSuccessHandler;
 
+    @Autowired
+    private OAuthFailureHandler oAuthFailureHandler;
+
     @Bean
     public BCryptPasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
@@ -64,7 +67,7 @@ public class SecurityConfig {
             )
             .oauth2Login(oauth2 -> oauth2
                 .successHandler(oAuthSuccessHandler)
-                .failureUrl("/api/auth/oauth2/failure")
+                .failureHandler(oAuthFailureHandler)
             );
 
         http.addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
