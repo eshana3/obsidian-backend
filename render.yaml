@@ -17,3 +17,21 @@ services:
       # Must be at least 32 characters for HS256 JWT signing.
       - key: JWT_SECRET
         sync: false
+      # Email — use Brevo SMTP relay (smtp-relay.brevo.com:587)
+      - key: MAIL_HOST
+        sync: false
+      - key: MAIL_PORT
+        value: "587"
+      - key: MAIL_USERNAME
+        sync: false
+      - key: MAIL_PASSWORD
+        sync: false
+      # GitHub OAuth (register at https://github.com/settings/developers)
+      # Authorization callback URL: https://obsidian-backend-n8zo.onrender.com/login/oauth2/code/github
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
+      # Frontend URL for post-OAuth redirect
+      - key: FRONTEND_BASE_URL
+        value: https://obsidian-frontend-ywof.onrender.com
