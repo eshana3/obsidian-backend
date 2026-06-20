@@ -63,7 +63,7 @@ public class OtpService {
             otpRepo.findTopByEmailAndUsedFalseOrderByCreatedAtDesc(email);
 
         if (opt.isEmpty()) {
-            return OtpVerificationResult.failure("No active OTP found. Please request a new one.");
+            return OtpVerificationResult.fail("No active OTP found. Please request a new one.");
         }
 
         OtpVerification record = opt.get();
@@ -71,13 +71,13 @@ public class OtpService {
         if (record.isExpired()) {
             record.setUsed(true);
             otpRepo.save(record);
-            return OtpVerificationResult.failure("OTP has expired. Please request a new one.");
+            return OtpVerificationResult.fail("OTP has expired. Please request a new one.");
         }
 
         if (record.getAttempts() >= maxAttempts) {
             record.setUsed(true);
             otpRepo.save(record);
-            return OtpVerificationResult.failure("Too many failed attempts. Please request a new OTP.");
+            return OtpVerificationResult.fail("Too many failed attempts. Please request a new OTP.");
         }
 
         record.setAttempts(record.getAttempts() + 1);
@@ -88,19 +88,19 @@ public class OtpService {
             if (remaining <= 0) {
                 record.setUsed(true);
                 otpRepo.save(record);
-                return OtpVerificationResult.failure("Invalid code. No attempts remaining — please request a new OTP.");
+                return OtpVerificationResult.fail("Invalid code. No attempts remaining — please request a new OTP.");
             }
-            return OtpVerificationResult.failure("Invalid code. " + remaining + " attempt(s) remaining.");
+            return OtpVerificationResult.fail("Invalid code. " + remaining + " attempt(s) remaining.");
         }
 
         record.setUsed(true);
         otpRepo.save(record);
         log.info("OTP verified successfully for {}", email);
-        return OtpVerificationResult.success();
+        return OtpVerificationResult.ok();
     }
 
     public record OtpVerificationResult(boolean success, String error) {
-        static OtpVerificationResult success() { return new OtpVerificationResult(true, null); }
-        static OtpVerificationResult failure(String msg) { return new OtpVerificationResult(false, msg); }
+        public static OtpVerificationResult ok() { return new OtpVerificationResult(true, null); }
+        public static OtpVerificationResult fail(String msg) { return new OtpVerificationResult(false, msg); }
     }
 }
