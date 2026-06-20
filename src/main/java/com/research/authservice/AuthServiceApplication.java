@@ -36,8 +36,17 @@ public class AuthServiceApplication {
     private static void parseAndApplyDatasourceUrl() {
         String rawUrl = System.getenv("SPRING_DATASOURCE_URL");
 
-        // Nothing to do: not set (local dev) or already in JDBC form.
-        if (rawUrl == null || rawUrl.startsWith("jdbc:")) {
+        if (rawUrl == null) {
+            log.info("=== DataSource URL ===");
+            log.info("  SPRING_DATASOURCE_URL not set — using application.properties default");
+            log.info("=====================");
+            return;
+        }
+        if (rawUrl.startsWith("jdbc:")) {
+            log.info("=== DataSource URL ===");
+            log.info("  SPRING_DATASOURCE_URL already in JDBC form — no conversion needed");
+            log.info("  URL host: {}", extractHostForLog(rawUrl));
+            log.info("=====================");
             return;
         }
 
@@ -109,6 +118,15 @@ public class AuthServiceApplication {
             throw new IllegalStateException(
                 "Failed to parse SPRING_DATASOURCE_URL as a postgres:// URI. " +
                 "Ensure Render's 'Internal Database URL' is used: " + e.getMessage(), e);
+        }
+    }
+
+    private static String extractHostForLog(String jdbcUrl) {
+        try {
+            URI u = new URI(jdbcUrl.replace("jdbc:", ""));
+            return u.getHost() + ":" + (u.getPort() > 0 ? u.getPort() : 5432);
+        } catch (Exception e) {
+            return "(unparseable)";
         }
     }
 }
