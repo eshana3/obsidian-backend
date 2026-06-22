@@ -11,12 +11,6 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 
-/**
- * Redirects the browser to the frontend error page when GitHub OAuth fails
- * (e.g. user denies access, invalid state, revoked token).
- * Uses FRONTEND_URL so the redirect always goes to the correct domain in
- * every environment.
- */
 @Component
 public class OAuthFailureHandler implements AuthenticationFailureHandler {
 
@@ -30,8 +24,14 @@ public class OAuthFailureHandler implements AuthenticationFailureHandler {
                                         HttpServletResponse response,
                                         AuthenticationException exception) throws IOException {
         log.warn("GitHub OAuth authentication failure: {}", exception.getMessage());
-        String redirectUrl = frontendUrl + "/login.html?error=oauth_failed";
-        log.info("GitHub OAuth → failure redirect: {}", redirectUrl);
+
+        // Use oauth-callback.html with error param so the same page handles
+        // both success and failure — avoids any login.html routing issues
+        String base = frontendUrl.endsWith("/")
+            ? frontendUrl.substring(0, frontendUrl.length() - 1)
+            : frontendUrl;
+        String redirectUrl = base + "/oauth-callback.html?error=oauth_failed";
+        log.info("GitHub OAuth failure → {}", redirectUrl);
         response.sendRedirect(redirectUrl);
     }
 }
