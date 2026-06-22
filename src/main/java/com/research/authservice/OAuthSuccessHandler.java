@@ -48,15 +48,17 @@ public class OAuthSuccessHandler implements AuthenticationSuccessHandler {
                                         HttpServletResponse response,
                                         Authentication authentication) throws IOException {
 
+        log.info("GitHub OAuth: onAuthenticationSuccess called");
+
         OAuth2AuthenticationToken oauthToken = (OAuth2AuthenticationToken) authentication;
         OAuth2User oauthUser = oauthToken.getPrincipal();
 
-        String login     = oauthUser.getAttribute("login");      // GitHub username
+        String login     = oauthUser.getAttribute("login");
         String name      = oauthUser.getAttribute("name");
         Object idObj     = oauthUser.getAttribute("id");
         String githubId  = idObj != null ? String.valueOf(idObj) : null;
         String avatarUrl = oauthUser.getAttribute("avatar_url");
-        String email     = oauthUser.getAttribute("email");      // null when email is private
+        String email     = oauthUser.getAttribute("email");
 
         if (name == null || name.isBlank()) {
             name = (login != null && !login.isBlank()) ? login : "GitHub User";
@@ -65,17 +67,17 @@ public class OAuthSuccessHandler implements AuthenticationSuccessHandler {
         log.info("GitHub OAuth: login='{}' name='{}' profileEmail='{}'",
             login, name, email != null ? email : "(private)");
 
-        // Most GitHub users have private email — profile returns null.
-        // Fall back to the /user/emails API which always returns verified emails.
+        // Most GitHub users have private email — fetch it via /user/emails API
         if (email == null || email.isBlank()) {
             log.info("GitHub OAuth: profile email absent for '{}' — calling /user/emails", login);
             email = fetchPrimaryEmailFromGitHub(oauthToken);
         }
 
         if (email == null || email.isBlank()) {
-            log.warn("GitHub OAuth: no verified email found for login='{}' — redirecting to error", login);
-            String redirectUrl = frontendUrl + "/login.html?error=github_no_email";
-            log.info("GitHub OAuth → failure redirect: {}", redirectUrl);
+            log.warn("GitHub OAuth: no verified email for login='{}' — redirecting to error", login);
+            // Use the clean frontend URL without .html extension (server handles routing)
+            String redirectUrl = cleanFrontendUrl() + "/login?error=github_no_email";
+            log.info("GitHub OAuth failure redirect → {}", redirectUrl);
             response.sendRedirect(redirectUrl);
             return;
         }
@@ -83,8 +85,9 @@ public class OAuthSuccessHandler implements AuthenticationSuccessHandler {
         final String resolvedEmail = email.trim().toLowerCase();
         final String resolvedName  = name;
 
-        log.info("GitHub OAuth: email resolved as '{}' for login='{}'", resolvedEmail, login);
+        log.info("GitHub OAuth: resolved email='{}' for login='{}'", resolvedEmail, login);
 
+        // Find or create user
         User user = userRepo.findByEmail(resolvedEmail).orElseGet(() -> {
             User u = new User();
             u.setEmail(resolvedEmail);
@@ -98,35 +101,46 @@ public class OAuthSuccessHandler implements AuthenticationSuccessHandler {
             return userRepo.save(u);
         });
 
-        // Link GitHub to an existing local (OTP) account that shares the same email
+        // Link GitHub to existing local account with same email
         if (githubId != null && user.getGithubId() == null) {
             user.setGithubId(githubId);
             user.setEmailVerified(true);
             if (avatarUrl != null) user.setAvatarUrl(avatarUrl);
             userRepo.save(user);
-            log.info("GitHub OAuth: linked GitHub account to existing user '{}'", resolvedEmail);
+            log.info("GitHub OAuth: linked GitHub to existing user '{}'", resolvedEmail);
         }
 
-        String jwt          = jwtUtil.generateToken(resolvedEmail);
-        String ipAddress    = request.getRemoteAddr();
-        String userAgent    = request.getHeader("User-Agent");
-        String refreshToken = refreshTokenService.generateRefreshToken(
+        String jwt       = jwtUtil.generateToken(resolvedEmail);
+        String ipAddress = request.getRemoteAddr();
+        String userAgent = request.getHeader("User-Agent");
+        String refreshTk = refreshTokenService.generateRefreshToken(
             user, true, ipAddress, userAgent);
 
-        String redirectUrl = frontendUrl + "/oauth-callback.html"
-            + "?token="  + URLEncoder.encode(jwt,             StandardCharsets.UTF_8)
-            + "&refresh=" + URLEncoder.encode(refreshToken,   StandardCharsets.UTF_8)
-            + "&name="    + URLEncoder.encode(user.getName(), StandardCharsets.UTF_8)
-            + "&email="   + URLEncoder.encode(resolvedEmail,  StandardCharsets.UTF_8);
+        log.info("GitHub OAuth: JWT generated for user='{}'", resolvedEmail);
 
-        log.info("GitHub OAuth success: user='{}' → {}/oauth-callback.html", resolvedEmail, frontendUrl);
+        // Build callback URL with tokens — goes to frontend /oauth-callback.html
+        // Use cleanFrontendUrl() to guarantee no trailing slash
+        String callbackBase = cleanFrontendUrl() + "/oauth-callback.html";
+        String redirectUrl  = callbackBase
+            + "?token="   + URLEncoder.encode(jwt,              StandardCharsets.UTF_8)
+            + "&refresh="  + URLEncoder.encode(refreshTk,       StandardCharsets.UTF_8)
+            + "&name="     + URLEncoder.encode(user.getName(),  StandardCharsets.UTF_8)
+            + "&email="    + URLEncoder.encode(resolvedEmail,   StandardCharsets.UTF_8);
+
+        log.info("GitHub OAuth: success → redirecting to {}", callbackBase);
         response.sendRedirect(redirectUrl);
     }
 
     /**
-     * Calls https://api.github.com/user/emails with the OAuth2 Bearer token.
-     * Returns the primary+verified email, falling back to any verified email.
-     * Returns null only if the API call fails or no verified email exists.
+     * Strips trailing slash from frontendUrl and ensures no double-slash.
+     */
+    private String cleanFrontendUrl() {
+        String url = (frontendUrl != null) ? frontendUrl.trim() : "http://localhost:3001";
+        return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
+    }
+
+    /**
+     * Fetches the primary verified email from GitHub /user/emails API.
      */
     private String fetchPrimaryEmailFromGitHub(OAuth2AuthenticationToken oauthToken) {
         try {
@@ -149,14 +163,14 @@ public class OAuthSuccessHandler implements AuthenticationSuccessHandler {
                 .GET()
                 .build();
 
-            HttpResponse<String> resp = HTTP_CLIENT.send(req, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> resp = HTTP_CLIENT.send(req,
+                HttpResponse.BodyHandlers.ofString());
 
             if (resp.statusCode() != 200) {
                 log.warn("GitHub /user/emails returned HTTP {}", resp.statusCode());
                 return null;
             }
 
-            // Response: [{email, primary, verified, visibility}, ...]
             JsonNode nodes = MAPPER.readTree(resp.body());
             String primaryVerified = null;
             String anyVerified     = null;
@@ -178,9 +192,9 @@ public class OAuthSuccessHandler implements AuthenticationSuccessHandler {
 
             String result = primaryVerified != null ? primaryVerified : anyVerified;
             if (result != null) {
-                log.info("GitHub OAuth: /user/emails resolved email '{}'", result);
+                log.info("GitHub OAuth: /user/emails resolved '{}'", result);
             } else {
-                log.warn("GitHub OAuth: /user/emails contained no verified email");
+                log.warn("GitHub OAuth: /user/emails had no verified email");
             }
             return result;
 
